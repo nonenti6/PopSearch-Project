@@ -1,0 +1,206 @@
+<!doctype html>
+{% macro choose_artist_notice(query) -%}
+  <div class="notice">Чтобы увидеть публикации, <a href="{{ url_for('index', q=query, type='artists') }}">выберите исполнителя</a>.</div>
+{%- endmacro %}
+{% macro artist_link(name) -%}
+  <a class="song-artist-link" href="{{ url_for('index', q=name, scope='artist') }}">{{ name }}</a>
+{%- endmacro %}
+{% macro song_artist(item) -%}
+  {{ artist_link(item.stage_name) }}
+  {%- if item.album_title %} · {{ item.album_title }}{% endif %}
+  {%- if item.release_year %} · {{ item.release_year }}{% endif %}
+{%- endmacro %}
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if query %}{{ query }} — {% endif %}PopSearch</title>
+  <meta name="theme-color" content="#f7efe2">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/popsearch-logo.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="site-shell">
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('index') }}" aria-label="PopSearch — на главную"><img class="brand-logo" src="{{ url_for('static', filename='images/popsearch-logo.png') }}" alt="Логотип PopSearch — нарисованная музыкальная нота" width="80" height="110"><span class="brand-copy"><span class="brand-name">PopSearch</span><span class="brand-subtitle">music knowledge</span></span></a>
+  </header>
+  <main class="container {{ 'has-query' if query else 'homepage' }}">
+    {% if not query %}
+      <div class="hero"><h1>Поп-музыка в одном поиске.</h1><p>Исполнители, песни, альбомы и актуальные публикации.</p></div>
+    {% endif %}
+    <form action="{{ url_for('index') }}" method="get" class="search" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+      <input type="search" name="q" value="{{ query }}" placeholder="Исполнитель, альбом или песня..." maxlength="150" aria-label="Поисковый запрос" required autofocus>
+      <input type="hidden" name="type" value="all">
+      <button type="submit">Найти <span aria-hidden="true">→</span></button>
+    </form>
+    {% if query %}
+      <nav class="tabs" aria-label="Категории поиска">
+        {% for id,label in [('all','Все'),('artists','Исполнители'),('albums','Альбомы'),('songs','Песни'),('publications','Публикации'),('video','Видео'),('image','Изображения')] %}
+          <a class="{{ 'selected' if category == id else '' }}" {% if category == id %}aria-current="page"{% endif %} href="{{ url_for('index', q=query, type=id, scope='artist' if artist_search else None) }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+      {% if error %}
+        <div class="notice error" role="alert">{{ error }}</div>
+      {% else %}
+        <div class="results-intro"><h1>Результаты по запросу «{{ query }}»</h1><p>Найдено в полученной выборке: {{ total }} · показано {{ [show,total]|min }} · собственная база знаний и интернет-источники</p></div>
+        {% if external_status == 'allowed' and external_genres %}<div class="external-evidence">Подтверждена связь с поп-музыкой: {{ external_genres|join(', ') }} · музыкальные каталоги / Wikidata / локальная база</div>{% endif %}
+        {% if external_notice %}<div class="external-message">{{ external_notice }}</div>{% endif %}
+        {% set empty_media = category in ('image', 'video') and not total %}
+        {% if category == 'all' %}
+          <div class="search-feed">
+            {% for entry in feed %}
+              {% set item = entry.data %}
+              {% if entry.type == 'artist' %}
+                <a class="feed-result feed-profile artist-card-link" href="{{ url_for('index', q=item.stage_name, scope='artist') }}">
+                  <div class="result-image artist-image">
+                    {% if item.portrait_url %}<img src="{{ item.portrait_url }}" alt="{{ item.stage_name }}" loading="lazy" onerror="this.hidden=true;this.parentElement.classList.add('failed')">{% endif %}
+                    <span class="image-placeholder">♫</span>
+                  </div>
+                  <div class="feed-text"><div class="eyebrow">Исполнитель · {{ 'Внешние источники' if item.origin|default('local') == 'external' else 'База знаний PopSearch' }}</div><h2>{{ item.stage_name }}</h2><p>{{ (item.bio or '')|truncate(290) }}</p></div>
+                </a>
+              {% elif entry.type == 'article' %}
+                <article class="feed-result"><div class="eyebrow">Статья · {{ item.source_name }} · {{ item.stage_name }}</div><h2><a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2><p>{{ item.description }}</p><div class="source-url">{{ item.source_url }}</div></article>
+              {% elif entry.type == 'news' %}
+                <article class="feed-result"><div class="eyebrow">Новость · {{ item.publisher }} · {{ item.published }}</div><h2><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2><p>Актуальная публикация из Google News RSS</p><div class="source-url">{{ item.publisher }}</div></article>
+              {% elif entry.type == 'album' %}
+                <article class="feed-result feed-album">
+                  <div class="result-image album-image">{% if item.cover_url %}<img src="{{ item.cover_url }}" alt="Обложка альбома {{ item.title }}" loading="lazy" onerror="this.hidden=true;this.parentElement.classList.add('failed')">{% endif %}<span class="image-placeholder">♫</span></div>
+                  <div class="feed-text"><div class="eyebrow">Альбом · {{ 'iTunes / Apple Music' if item.origin|default('local') == 'external' else 'База знаний PopSearch' }}</div><h2>{{ item.title }}</h2><p>{{ item.stage_name }} · {{ item.release_year or 'Год неизвестен' }}</p>{% if item.cover_source %}<a class="artwork-credit" href="{{ item.cover_source }}" target="_blank" rel="noopener noreferrer">Обложка и альбом в Apple Music ↗</a>{% endif %}</div>
+                </article>
+              {% elif entry.type == 'song' %}
+                <article class="feed-result"><div class="eyebrow">Композиция · {{ 'iTunes / Apple Music' if item.origin|default('local') == 'external' else 'База знаний PopSearch' }}</div><h2>{{ item.song_title }}</h2><p>{{ song_artist(item) }} · {{ "Каталог iTunes" if item.origin|default("local") == "external" else "принадлежность к дискографии установлена по связи с альбомом" }}</p>{% if item.url %}<a class="artwork-credit" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Открыть композицию ↗</a>{% endif %}</article>
+              {% endif %}
+            {% endfor %}
+            {% if news_error and news_artist %}<div class="notice news-warning">{{ news_error }} Данные базы знаний доступны.</div>{% endif %}
+          </div>
+        {% elif category == 'artists' and song_search %}
+          <section class="results-section">
+            <h2>Найденные исполнители</h2>
+            <div class="stack">
+              {% for item in results.artists %}
+                <a class="result-card artist-card artist-card-link" href="{{ url_for('index', q=item.stage_name, scope='artist') }}">
+                  <div class="result-image artist-image">
+                    {% if item.matched_artist_portrait %}<img src="{{ item.matched_artist_portrait }}" alt="" loading="lazy" onerror="this.hidden=true;this.parentElement.classList.add('failed')">{% endif %}
+                    <span class="image-placeholder" aria-hidden="true">♫</span>
+                  </div>
+                  <div>
+                    <h3>{{ item.stage_name }}</h3>
+                    {% if item.matched_song_title %}<p>{{ item.matched_song_title }}</p>{% endif %}
+                  </div>
+                </a>
+              {% endfor %}
+            </div>
+          </section>
+        {% elif category == 'artists' %}
+          <section class="results-section"><h2>Исполнители</h2><div class="stack">
+            {% for item in results.artists %}<a class="result-card artist-card artist-card-link" href="{{ url_for('index', q=item.stage_name, scope='artist') }}"><div class="result-image artist-image">{% if item.portrait_url %}<img src="{{ item.portrait_url }}" alt="Фото {{ item.stage_name }}" loading="lazy" onerror="this.hidden=true;this.parentElement.classList.add('failed')">{% endif %}<span class="image-placeholder">♫</span></div><div><div class="eyebrow">Исполнитель · {{ item.country or 'Страна не указана' }}</div><h3>{{ item.stage_name }}</h3><p>{{ item.bio or '' }}</p></div></a>{% endfor %}
+          </div></section>
+        {% elif category == 'albums' and song_search and not results.albums %}
+          <div class="notice">Альбомы найденных песен не указаны. <a href="{{ url_for('index', q=query, type='artists') }}">Выбери исполнителя</a>, чтобы открыть его дискографию.</div>
+        {% elif category == 'albums' %}
+          <section class="results-section"><h2>Альбомы</h2><div class="tile-grid">
+            {% for item in results.albums %}<article class="result-card album-card"><div class="result-image album-image">{% if item.cover_url %}<img src="{{ item.cover_url }}" alt="Обложка альбома {{ item.title }}" loading="lazy" onerror="this.hidden=true;this.parentElement.classList.add('failed')">{% endif %}<span class="image-placeholder">♫</span></div><div><div class="eyebrow">Альбом</div><h3>{{ item.title }}</h3><p>{% if song_search %}{{ artist_link(item.stage_name) }}{% else %}{{ item.stage_name }}{% endif %} · {{ item.release_year or 'Год не указан' }}</p>{% if item.cover_source %}<a class="artwork-credit" href="{{ item.cover_source }}" target="_blank" rel="noopener noreferrer">Слушать в Apple Music ↗</a>{% endif %}</div></article>{% endfor %}
+          </div></section>
+        {% elif category == 'songs' %}
+          <section class="results-section"><h2>Песни</h2><div class="song-list">{% for item in results.songs %}<article class="song-row"><div class="song-icon">♫</div><div><h3>{{ item.song_title }}</h3><p>{{ song_artist(item) }}{% if item.url %} · <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Слушать ↗</a>{% endif %}</p></div><span class="inference">{{ "iTunes" if item.origin|default("local") == "external" else "↗ Вывод через альбом" }}</span></article>{% endfor %}</div></section>
+        {% elif empty_media %}
+          {% if news_artist or artist_search %}
+            <div class="notice">{{ 'Изображения' if category == 'image' else 'Видео' }} для «{{ news_artist or query }}» не найдены.</div>
+          {% else %}
+            {{ choose_artist_notice(query) }}
+          {% endif %}
+        {% elif category == 'image' %}
+          <section class="results-section photo-results" aria-label="Фотографии"><h2>Изображения</h2>
+            <div class="media-grid image-gallery">
+              {% for item in results.materials %}
+                <article class="result-card media-card photo-card">
+                  {% if item.is_direct_image %}
+                    <button type="button" class="photo-open" data-photo-open data-full-src="{{ item.source_url }}" data-source-url="{{ item.page_url|default(item.source_url, true) }}" data-photo-alt="{{ item.title or ('Фото ' ~ item.stage_name) }}" aria-label="Открыть фотографию на весь экран: {{ item.title or item.stage_name }}">
+                      <img src="{{ item.source_url }}" alt="{{ item.title or ('Фото ' ~ item.stage_name) }}" loading="lazy" onerror="this.hidden=true;this.parentElement.disabled=true;this.closest('.photo-card').classList.add('photo-unavailable')">
+                      <span class="photo-error" aria-hidden="true">Не удалось загрузить фото</span>
+                    </button>
+                    <a class="photo-external photo-source-fallback" href="{{ item.page_url|default(item.source_url, true) }}" target="_blank" rel="noopener noreferrer">Открыть фото на сайте источника ↗</a>
+                  {% else %}
+                    <a class="photo-external" href="{{ item.page_url|default(item.source_url, true) }}" target="_blank" rel="noopener noreferrer" aria-label="Открыть изображение на сайте источника">Изображение на сайте источника ↗</a>
+                  {% endif %}
+                </article>
+              {% endfor %}
+            </div>
+          </section>
+        {% elif category == 'video' %}
+          <section class="results-section"><h2>Видео</h2><div class="media-grid">
+            {% for item in results.materials %}<article class="result-card material-card media-card">
+              {% if item.youtube_id %}<div class="video-frame" data-video-id="{{ item.youtube_id }}"><img src="https://i.ytimg.com/vi/{{ item.youtube_id }}/hqdefault.jpg" alt="Превью {{ item.title }}" loading="lazy"><button type="button" class="play-button" data-play aria-label="Воспроизвести {{ item.title }}">▶</button></div>{% else %}<div class="media-fallback">▶</div>{% endif %}
+              <div class="material-content"><div class="eyebrow">{{ item.stage_name }} · {{ item.source_name }}</div><h3>{{ item.title }}</h3><p>{{ item.description }}</p><a href="{{ item.page_url|default(item.source_url) }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+            </article>{% endfor %}
+          </div></section>
+        {% elif category == 'publications' %}
+          {% if song_search and not news_artist %}
+            {{ choose_artist_notice(query) }}
+          {% else %}
+            {% if articles %}
+              <section class="results-section">
+                <h2>Об исполнителе</h2>
+                <div class="stack">
+                  {% for item in articles %}
+                    <article class="feed-result">
+                      <div class="eyebrow">{{ item.source_name }} · {{ item.stage_name }}</div>
+                      <h3><a href="{{ item.source_url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h3>
+                      {% if item.description %}<p>{{ item.description }}</p>{% endif %}
+                    </article>
+                  {% endfor %}
+                </div>
+              </section>
+            {% endif %}
+            {% if news_artist %}
+              <section class="results-section">
+                <h2>Свежие новости</h2>
+                {% if news_error %}
+                  <div class="notice news-warning">{{ news_error }}</div>
+                {% elif news %}
+                  <div class="stack">
+                    {% for item in news %}
+                      <article class="feed-result">
+                        <div class="eyebrow">{{ item.publisher }} · {{ item.published }}</div>
+                        <h3><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h3>
+                      </article>
+                    {% endfor %}
+                  </div>
+                {% elif not more_available %}
+                  <p class="news-info">За последние 30 дней новостей не найдено.</p>
+                {% endif %}
+              </section>
+            {% endif %}
+          {% endif %}
+        {% endif %}
+        {% if more_available %}
+          <form class="load-more" action="{{ url_for('index') }}" method="get">
+            <input type="hidden" name="q" value="{{ query }}">
+            <input type="hidden" name="type" value="{{ category }}">
+            {% if artist_search %}<input type="hidden" name="scope" value="artist">{% endif %}
+            <input type="hidden" name="show" value="{{ show + 10 }}">
+            <button type="submit">Показать ещё результаты ↓</button>
+          </form>
+        {% endif %}
+        {% if total == 0 and not news_error and not empty_media and not (song_search and category == 'albums') and not (category == 'publications' and (song_search or news_artist)) %}<div class="empty-state"><div>⌕</div><h2>Ничего не найдено</h2><p>Попробуйте другое имя поп-исполнителя, название альбома или песни. Если жанр не подтверждён, внешние результаты не показываются.</p></div>{% endif %}
+      {% endif %}
+    {% else %}
+      <div class="suggestions"><span>Популярные запросы</span>{% for name in ['Dua Lipa','Taylor Swift','Espresso','Future Nostalgia'] %}<a href="{{ url_for('index', q=name) }}">{{ name }} ↗</a>{% endfor %}</div>
+    {% endif %}
+  </main>
+  <footer class="footer">PopSearch · Учебная тематическая поисковая система · PostgreSQL и внешние каталоги</footer>
+</div>
+<div class="photo-lightbox" id="photo-lightbox" role="dialog" aria-modal="true" aria-label="Просмотр фотографии" aria-hidden="true" hidden>
+  <div class="photo-lightbox-toolbar">
+    <a class="photo-lightbox-source" href="#" target="_blank" rel="noopener noreferrer">Источник изображения ↗</a>
+    <button type="button" class="photo-lightbox-close" data-photo-close aria-label="Закрыть просмотр">✕</button>
+  </div>
+  <button type="button" class="photo-lightbox-prev" data-photo-prev aria-label="Предыдущая фотография">‹</button>
+  <div class="photo-lightbox-body"><img class="photo-lightbox-image" alt=""></div>
+  <button type="button" class="photo-lightbox-next" data-photo-next aria-label="Следующая фотография">›</button>
+  <div class="photo-lightbox-counter" aria-live="polite"></div>
+</div>
+<script src="{{ url_for('static',filename='js/search.js') }}" defer></script>
+</body>
+</html>
