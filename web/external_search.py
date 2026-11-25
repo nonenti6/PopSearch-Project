@@ -202,12 +202,6 @@ def resolve_artists_from_media(query):
     return candidates[:8]
 
 
-def resolve_artist_from_media(query):
-    """Обратная совместимость с прежними тестами."""
-    artists = resolve_artists_from_media(query)
-    return artists[0] if artists else None
-
-
 def _artist_name_matches_query(query, artist_name):
     """Проверяет вхождение значимой подстроки запроса в имя артиста (не в названия песен).
 
